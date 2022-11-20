@@ -6,6 +6,10 @@ import { readFile } from 'fs/promises';
 import jwt from 'jsonwebtoken';
 import { User } from './db.js';
 import { resolvers } from './resolvers.js';
+import { createServer as createHttpServer } from 'http';
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { WebSocketServer } from 'ws';
+import { useServer as useWsServer } from 'graphql-ws/lib/use/ws';
 
 const PORT = 9000;
 const JWT_SECRET = Buffer.from('+Z3zPGXY7v/0MoMm1p8QuHDGGVrhELGd', 'base64');
@@ -35,12 +39,18 @@ function getContext({ req }) {
   return {};
 }
 
+const httpServer = createHttpServer(app);
+const wsServer = new WebSocketServer({ server: httpServer, path: '/graphql' })
+
 const typeDefs = await readFile('./schema.graphql', 'utf8');
-const apolloServer = new ApolloServer({ typeDefs, resolvers, context: getContext });
+const schema = makeExecutableSchema({ typeDefs, resolvers })
+useWsServer({ schema }, wsServer);
+
+const apolloServer = new ApolloServer({ schema, context: getContext });
 await apolloServer.start();
 apolloServer.applyMiddleware({ app, path: '/graphql' });
 
-app.listen({ port: PORT }, () => {
+httpServer.listen({ port: PORT }, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
 });
